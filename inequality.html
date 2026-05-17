@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UK Wealth Flow — 1945 to 2056</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --border: #374151;
+        --muted: #9ca3af;
+        --c-top01: #f43f5e;
+        --c-top1: #fb923c;
+        --c-top10: #fcd34d;
+        --c-b90: #10b981;
+        --c-gov: #38bdf8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background-color: var(--bg);
+        color: #f3f4f6;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #controls {
+        width: 360px;
+        flex-shrink: 0;
+        background-color: var(--panel);
+        padding: 18px;
+        border-right: 1px solid #1f2937;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 10;
+        overflow-y: auto;
+      }
+      #simulation-container {
+        flex-grow: 1;
+        position: relative;
+        background: radial-gradient(circle at center, #111827 0%, #070a10 100%);
+        min-width: 0;
+      }
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      h2 { margin: 0 0 2px 0; font-size: 1.2rem; color: #38bdf8; }
+      .hud-item {
+        background-color: var(--panel-2);
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .hud-label-group { display: flex; flex-direction: column; }
+      .hud-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: var(--muted);
+        letter-spacing: 0.05em;
+      }
+      .hud-desc { font-size: 0.72rem; color: #6b7280; }
+      .hud-value { font-size: 1.15rem; font-weight: bold; font-family: monospace; }
+      .media-deck {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        background: var(--panel-2);
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+      }
+      .control-btn {
+        background-color: var(--border);
+        color: #fff;
+        border: 1px solid #4b5563;
+        padding: 8px 0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: bold;
+        transition: all 0.15s;
+      }
+      .control-btn:hover { background-color: #4b5563; }
+      .control-btn.active { background-color: #38bdf8; color: #0b0f19; }
+      .slider-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        background: var(--panel-2);
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+      }
+      .slider-label { font-size: 0.8rem; display: flex; justify-content: space-between; }
+      input[type="range"] { width: 100%; accent-color: #a855f7; cursor: pointer; }
+      .btn-reset {
+        background-color: #4b5563;
+        color: white;
+        border: none;
+        padding: 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.85rem;
+      }
+      .btn-reset:hover { background-color: var(--border); }
+      .mode-indicator {
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: bold;
+        padding: 6px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+      }
+      .mode-historical { background-color: #1e3a8a; color: #60a5fa; border-color: #3b82f6; }
+      .mode-future {
+        background-color: #4c1d95;
+        color: #c084fc;
+        border-color: #a855f7;
+        animation: pulseGlow 2s infinite alternate;
+      }
+      @keyframes pulseGlow {
+        from { box-shadow: 0 0 4px #a855f7; }
+        to { box-shadow: 0 0 12px #a855f7; }
+      }
+      #event-banner {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 380px;
+        max-width: calc(100% - 40px);
+        background-color: rgba(11, 15, 25, 0.96);
+        border: 2px solid #38bdf8;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+        transform: translateX(460px);
+        transition: transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        z-index: 20;
+      }
+      #event-banner.active { transform: translateX(0); }
+      #event-banner.future-variant { border-color: #a855f7; }
+      #event-title { font-weight: bold; margin-bottom: 6px; font-size: 0.98rem; color: #38bdf8; }
+      #event-body { font-size: 0.85rem; line-height: 1.4; color: #d1d5db; }
+      #event-dismiss {
+        margin-top: 10px;
+        background: var(--border);
+        border: none;
+        color: #fff;
+        padding: 5px 12px;
+        font-size: 0.72rem;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .legend {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 0.74rem;
+      }
+      .legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+      .legend .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+      .legend .note { color: var(--muted); margin-top: 6px; font-size: 0.66rem; line-height: 1.35; }
+      .src-box {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px;
+        font-size: 0.68rem;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .src-box b { color: #cbd5e1; }
+      .src-box summary { cursor: pointer; color: #cbd5e1; font-weight: bold; font-size: 0.74rem; }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <div>
+        <h2>UK Wealth Flow</h2>
+        <p style="margin: 0; font-size: 0.75rem; color: var(--muted)">
+          Household wealth distribution 1945–2026, then a tax projection sandbox to 2056.
+        </p>
+      </div>
+
+      <div class="hud-item" style="border-left: 4px solid #ffffff">
+        <div class="hud-label-group">
+          <span class="hud-label">Current Timeline</span>
+        </div>
+        <div id="hud-date" class="hud-value" style="color: #fff">01/01/1945</div>
+      </div>
+
+      <div class="media-deck">
+        <button id="m-rewind" class="control-btn" title="Rewind 5 Years (keeps play/pause state)">⏮ 5Y</button>
+        <button id="m-play" class="control-btn active" title="Play">▶</button>
+        <button id="m-pause" class="control-btn" title="Pause">⏸</button>
+        <button id="m-fforward" class="control-btn" title="Cycle speed ×1 / ×3 / ×8">⏩ 1×</button>
+      </div>
+      <button id="m-rerun" class="control-btn" style="width:100%; padding:9px 0; background:#4c1d95; border-color:#a855f7; color:#e9d5ff;"
+        title="Jump to 2026, reset the projection, and stay paused so you can set the tax rate">
+        ↻ Re-run projection from 2026
+      </button>
+
+      <div id="mode-badge" class="mode-indicator mode-historical">
+        TRACKING HISTORICAL DATA (1945–2026)
+      </div>
+
+      <div class="slider-group" id="wealth-tax-box" style="opacity: 0.5">
+        <div class="slider-label">
+          <span style="font-weight: bold">Annual wealth tax, top 10%:</span>
+          <span id="tax-val" style="font-weight: bold; color: #c084fc">0.0%</span>
+        </div>
+        <input type="range" id="tax-slider" min="0" max="5" step="0.25" value="0" disabled />
+        <div style="display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px;">
+          <span>0%</span><span>~1.7% (hold)</span><span>5%</span>
+        </div>
+        <div style="font-size: 0.62rem; color: #6b7280; margin-top: 4px; line-height: 1.35;">
+          Levied only on hard-to-relocate bases (UK residential property, UK land,
+          UK-source company value). Unlocks at 2026.
+        </div>
+      </div>
+
+      <div class="hud-item" style="border-left: 4px solid var(--c-top01)">
+        <div class="hud-label-group">
+          <span class="hud-label">Top 0.1% Share</span>
+          <span class="hud-desc">of all household wealth</span>
+        </div>
+        <div style="text-align:right">
+          <div id="hud-top01" class="hud-value" style="color: var(--c-top01)">9.0%</div>
+          <div id="gbp-top01" style="font-size:0.72rem;font-family:monospace;color:#fde68a">£1.44tn</div>
+        </div>
+      </div>
+      <div class="hud-item" style="border-left: 4px solid var(--c-top1)">
+        <div class="hud-label-group">
+          <span class="hud-label">Next 0.9% (rest of top 1%)</span>
+          <span class="hud-desc">of all household wealth</span>
+        </div>
+        <div style="text-align:right">
+          <div id="hud-top1" class="hud-value" style="color: var(--c-top1)">38.0%</div>
+          <div id="gbp-top1" style="font-size:0.72rem;font-family:monospace;color:#fde68a">£6.08tn</div>
+        </div>
+      </div>
+      <div class="hud-item" style="border-left: 4px solid var(--c-top10)">
+        <div class="hud-label-group">
+          <span class="hud-label">Next 9% (rest of top 10%)</span>
+          <span class="hud-desc">of all household wealth</span>
+        </div>
+        <div style="text-align:right">
+          <div id="hud-top10" class="hud-value" style="color: var(--c-top10)">30.0%</div>
+          <div id="gbp-top10" style="font-size:0.72rem;font-family:monospace;color:#fde68a">£4.80tn</div>
+        </div>
+      </div>
+      <div class="hud-item" style="border-left: 4px solid var(--c-b90)">
+        <div class="hud-label-group">
+          <span class="hud-label">Bottom 90% Share</span>
+          <span class="hud-desc">of all household wealth</span>
+        </div>
+        <div style="text-align:right">
+          <div id="hud-bottom90" class="hud-value" style="color: var(--c-b90)">23.0%</div>
+          <div id="gbp-bottom90" style="font-size:0.72rem;font-family:monospace;color:#fde68a">£3.68tn</div>
+        </div>
+      </div>
+
+      <div class="hud-item" style="border-left: 4px solid #fde68a; display:block">
+        <div class="hud-label" style="margin-bottom:2px">Total household wealth pool</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span id="gbp-total" class="hud-value" style="color:#fde68a;font-size:1rem">£16.00tn</span>
+          <span id="gbp-total-real" style="font-size:0.66rem;color:#94a3b8;font-family:monospace"></span>
+        </div>
+        <div class="hud-desc" style="margin-top:4px;line-height:1.35">
+          Reasoned midpoint. ONS balance sheet ≈£10.8tn; ONS survey ≈£13.6tn;
+          IFS ≈£16–22tn — they differ by trillions. Grows ≈3%/yr nominal in
+          the projection while shares keep shifting.
+        </div>
+      </div>
+
+      <button id="btn-reset" class="btn-reset">Reset to 1945</button>
+
+      <div class="legend">
+        <div class="row"><span class="dot" style="background:var(--c-top01)"></span> Top 0.1%</div>
+        <div class="row"><span class="dot" style="background:var(--c-top1)"></span> Next 0.9% (rest of top 1%)</div>
+        <div class="row"><span class="dot" style="background:var(--c-top10)"></span> Next 9% (rest of top 10%)</div>
+        <div class="row"><span class="dot" style="background:var(--c-b90)"></span> Bottom 90%</div>
+        <div class="row"><span class="dot" style="background:var(--c-gov)"></span> State / public net worth (waterline)</div>
+        <div class="note">
+          Circle area ∝ share of household wealth. Moving particles show the
+          <i>direction</i> of net transfer between groups — illustrative, not to scale.
+          The waterline along the canvas floor is a separate measure (% of GDP).
+        </div>
+      </div>
+
+      <details class="src-box">
+        <summary>Data sources &amp; caveats (read me)</summary>
+        <p>
+          <b>Household shares:</b> long-run top-wealth-share series from Alvaredo,
+          Atkinson &amp; Morelli (2018), "Top wealth shares in the UK over more than
+          a century"; recent levels cross-checked against the IFS Deaton Review and
+          ONS Wealth &amp; Assets Survey. Top 1% ≈ 70% (1914) → ≈ 16% (1980) → ≈ 20%
+          (recent). The split of the top 1% into 0.1% / 0.9% is <b>interpolated</b>
+          and the least certain part.
+        </p>
+        <p>
+          <b>Why estimates vary:</b> survey vs national-accounts aggregates move the
+          top 1% by ~2 points (≈14.4–16.5% for 2016–18); the ONS survey puts the top
+          10% near 43%, capitalised series nearer 55–60%. Figures here are reasoned
+          central values, not a single official number.
+        </p>
+        <p>
+          <b>State waterline:</b> ONS national balance sheet / IMF. UK public sector
+          net worth is roughly −90 to −100% of GDP today (negative). The waterline
+          along the bottom of the canvas is <b>not</b> a slice of the household pie —
+          it is a different measure on its own scale, which is why it sinks below the
+          baseline rather than shrinking a circle.
+        </p>
+        <p>
+          <b>The 2026–2056 projection is an illustrative toy model, not a forecast.</b>
+          It assumes a tax only on hard-to-relocate bases so behavioural/capital-flight
+          response is minimal. The state-rebuild uses a sourced revenue estimate
+          (≈0.6% of GDP per 1pp of rate at low rates, with diminishing returns —
+          calibrated from the Wealth Tax Commission and the Warwick/IFG ≈£24bn-from-2%
+          figure, against ≈£2.6tn GDP). Its <b>central assumption is that the revenue
+          is banked into public net worth rather than spent on services</b> — real
+          governments mostly spend it, so this is a deliberate "what-if", not a
+          prediction. The "≈1.7% holds the household line" figure is likewise a model
+          assumption. All numbers live in the CONFIG block in the source.
+        </p>
+      </details>
+    </div>
+
+    <div id="simulation-container">
+      <div id="event-banner">
+        <div id="event-title">UK HISTORICAL MILESTONE</div>
+        <div id="event-body">Event details populate here.</div>
+        <button id="event-dismiss">Continue ▶</button>
+      </div>
+      <canvas id="simCanvas"></canvas>
+    </div>
+
+    <script>
+      "use strict";
+
+      /* =====================================================================
+         CONFIG — every number that drives the model lives here so it can be
+         audited and swapped. Sources are summarised in the "Data sources"
+         panel in the UI.
+
+         Columns: [year, top0.1%, next0.9%, next9%, bottom90%, stateNetWorth%GDP]
+         The four household shares sum to 100 (of household wealth).
+         stateNetWorth is % of GDP on its OWN scale (can be negative).
+
+         Anchored on Alvaredo/Atkinson/Morelli top-1% & top-10% series:
+           top1%:  ~47 (1945) -> ~16 (1980) -> ~20 (recent)
+           top10%: ~77 (1945) -> ~50 (1980) -> ~57 (recent)
+         Bottom 90% = 100 - top10%. Within-top-1% 0.1/0.9 split interpolated.
+         ===================================================================== */
+      const CONFIG = {
+        baseDaysPerTick: 14,        // sim days advanced per frame at ×1
+        speeds: [1, 3, 8],          // fast-forward cycle
+        eventPauseFrames: 99999,    // pause until user dismisses (manual continue)
+        futureDriftPerYear: 0.55,   // %pts/yr the bottom 90%+state lose with zero tax
+        taxHoldRate: 1.7,           // tax rate (%) that offsets the household drift
+
+        /* ---- Revenue → state-rebuild model (illustrative, sourced) ----
+           Chain: tax rate r on the top 10% (hard-to-relocate bases only)
+                  -> net annual revenue as % of GDP
+                  -> that revenue BANKED into public sector net worth.
+
+           Calibration basis:
+            * Warwick/IFG: a 2% annual levy on wealth >£10m ≈ £24bn/yr.
+            * Wealth Tax Commission: broad base ≈£9.9tn over £500k; ~10%
+              lost to non-compliance/avoidance.
+            * UK GDP ≈ £2.6tn.
+           Restricting to hard-to-relocate bases (UK residential property,
+           UK land, UK-source company value) ≈ half the broad base but with
+           minimal avoidance (the user's stipulation). Reasoned central
+           estimate: ~0.6% of GDP net per 1pp of rate at low rates, with
+           DIMINISHING RETURNS (the effective base shrinks as cumulative
+           wealth is taken) and a practical ceiling. */
+        revPerPointAtLowRate: 0.60, // % of GDP per 1pp of tax, before decay
+        revHalfSaturationRate: 3.0, // rate (%) at which marginal yield ~halves
+        stateRebuildCapPerYear: 4.0,// max %GDP/yr net worth can improve
+        stateTarget: 30,            // soft ceiling: rebuild eases off near +30% GDP
+
+        /* ---- Pound figures & economic growth ----
+           "Total UK household wealth" has no single value. ONS national
+           balance sheet ≈ £10.8tn (2024); ONS Wealth & Assets Survey
+           ≈ £13.6tn; IFS, depending on how defined-benefit pensions are
+           valued, ≈ £16tn to £22tn. We use a reasoned midpoint. EDIT THIS
+           one number to switch to any official figure you prefer — every
+           £ amount in the UI scales from it.
+           Growth: UK real GDP growth has run ≈1%/yr; with low inflation
+           that's ≈3%/yr nominal. The pool grows at this rate WHILE the
+           distribution keeps shifting, so £ figures rise even as the
+           bottom 90% stagnates in real terms — which is why we show both
+           nominal and real (today's £) values. */
+        totalWealth2026Bn: 16000,   // £bn total household wealth at 2026
+        nominalGrowthPerYear: 0.030,// ≈3% nominal (≈1% real + ≈2% inflation)
+        inflationPerYear: 0.020,    // used to deflate to today's-£ (real)
+
+        historical: [
+          // year, t01,  t09,  n9,   b90,  state(%GDP)
+          [1945,   9.0,  38.0, 30.0, 23.0,   5],
+          [1955,   7.0,  31.0, 33.0, 29.0,  12],
+          [1965,   5.5,  24.5, 34.0, 36.0,  16],
+          [1975,   3.8,  16.2, 34.0, 46.0,  18],
+          [1980,   3.5,  12.5, 34.0, 50.0,  10],
+          [1985,   3.7,  13.3, 35.0, 48.0,  -2],
+          [1990,   4.0,  14.0, 36.0, 46.0,  -8],
+          [1995,   4.2,  14.8, 37.0, 44.0, -18],
+          [2005,   4.4,  15.1, 37.5, 43.0, -28],
+          [2010,   4.6,  15.4, 37.5, 42.5, -55],
+          [2015,   4.6,  15.4, 37.5, 42.5, -75],
+          [2020,   4.7,  15.5, 37.3, 42.5, -90],
+          [2026,   4.7,  15.6, 37.2, 42.5, -96],
+        ],
+        milestones: [
+          { year: 1945, title: "1945 — Post-war settlement",
+            body: "Estate duty (up to 65%+) and post-war reconstruction. The top 1% holds roughly half of all household wealth, but its long decline has begun. Public net worth is positive: the state owns infrastructure, utilities and housing." },
+          { year: 1948, title: "1948 — NHS & nationalisations",
+            body: "Coal, rail, steel, utilities and the Bank of England brought into public ownership. State net worth rises; the post-war 'Great Equalisation' of private wealth continues — driven largely by new wealth growing faster than old fortunes." },
+          { year: 1975, title: "1975 — The equalisation trough approaches",
+            body: "The bottom 90% share is near its historic peak (~46%) and the top 1% near its historic low. High top tax rates and the spread of owner-occupied housing have compressed the distribution about as far as it ever gets." },
+          { year: 1980, title: "1980 — Inflection point",
+            body: "Right to Buy begins; the long fall in top wealth shares stops here. From this point the literature (Alvaredo/Atkinson/Morelli) shows top shares rising again. State net worth starts a long slide as privatisation proceeds are spent, not banked." },
+          { year: 1986, title: "1986 — 'Big Bang' & privatisations",
+            body: "Financial deregulation and the major utility privatisations. Public assets move to private hands; the proceeds largely fund current spending and tax cuts, so state net worth falls rather than being preserved." },
+          { year: 2009, title: "2009 — Crisis, QE & asset prices",
+            body: "Post-crisis quantitative easing and a decade of low rates inflate asset prices. Because the wealthy hold most assets, this widens the gap even where 'relative' inequality stats look flat. State net worth deteriorates sharply." },
+          { year: 2020, title: "2020 — Pandemic asset boom",
+            body: "Saving and asset-price gains accrue disproportionately to those who already hold wealth. Public net worth approaches roughly −90 to −100% of GDP (IMF/ONS) — among the weakest public balance sheets in the G7." },
+          { year: 2026, title: "2026 — Projection sandbox unlocked",
+            body: "Historical data ends. You now set an annual wealth tax on the top 10%, levied only on bases that are hard to relocate (UK residential property, UK land, UK-source company value). The revenue is modelled as banked into public net worth — so watch the waterline rebuild as wealth flows from the top into the State. Revenue has diminishing returns, so a higher rate is not proportionally more powerful. This is an illustrative model, not a forecast." },
+        ],
+      };
+
+      /* ---- runtime state ---- */
+      const canvas = document.getElementById("simCanvas");
+      const ctx = canvas.getContext("2d");
+
+      let isRunning = true;
+      let speedIndex = 0;
+      let wealthTaxRate = 0.0;
+      let isFutureMode = false;
+      let paused4Event = false;     // true while an event modal is showing
+      let activeMilestone = null;
+
+      const startYear = 1945;
+      const endYear = 2056;
+      let currentDate = new Date(startYear, 0, 1);
+      const endDate = new Date(endYear, 0, 1);
+
+      let particles = [];
+      let waveT = 0;          // wave phase accumulator for the waterline
+      let stateDisplay = 5;   // eased value the waterline actually renders
+      // Total household wealth pool (£bn). Fixed through the historical
+      // phase (we don't have a clean long-run nominal series), then grows
+      // at the low nominal rate during the 2026+ projection.
+      let totalWealthBn = CONFIG.totalWealth2026Bn;
+      const milestones = CONFIG.milestones.map(m => ({ ...m, triggered: false }));
+
+      const current = { t01: 9.0, t09: 38.0, n9: 30.0, b90: 23.0, state: 5 };
+      // snapshot of shares at the previous update, used to measure the
+      // *magnitude* of each year's shift so particle flow reflects it
+      let prevShares = { t01: 9.0, t09: 38.0, n9: 30.0, b90: 23.0 };
+      let prevYearDec = 1945;
+
+      const pools = {
+        t01:  { x: 0, y: 0, r: 0, cr: 0, color: "#f43f5e", label: "Top 0.1%" },
+        t09:  { x: 0, y: 0, r: 0, cr: 0, color: "#fb923c", label: "Next 0.9%" },
+        n9:   { x: 0, y: 0, r: 0, cr: 0, color: "#fcd34d", label: "Next 9%" },
+        b90:  { x: 0, y: 0, r: 0, cr: 0, color: "#10b981", label: "Bottom 90%" },
+      };
+
+      /* ---- canvas sizing ---- */
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // layout the four pools in the upper ~72% — the bottom band is
+        // reserved for the State / Public Net Worth waterline
+        pools.t01.x = w * 0.52; pools.t01.y = h * 0.20;
+        pools.n9.x  = w * 0.52; pools.n9.y  = h * 0.44;
+        pools.t09.x = w * 0.23; pools.t09.y = h * 0.33;
+        pools.b90.x = w * 0.79; pools.b90.y = h * 0.52;
+        canvas._w = w; canvas._h = h;
+      }
+      window.addEventListener("resize", resizeCanvas);
+
+      /* ---- DOM refs ---- */
+      const taxSlider   = document.getElementById("tax-slider");
+      const taxVal      = document.getElementById("tax-val");
+      const wealthTaxBox= document.getElementById("wealth-tax-box");
+      const btnReset    = document.getElementById("btn-reset");
+      const modeBadge   = document.getElementById("mode-badge");
+      const eventBanner = document.getElementById("event-banner");
+      const eventTitle  = document.getElementById("event-title");
+      const eventBody   = document.getElementById("event-body");
+      const eventDismiss= document.getElementById("event-dismiss");
+      const btnRewind   = document.getElementById("m-rewind");
+      const btnRerun    = document.getElementById("m-rerun");
+      const btnPlay     = document.getElementById("m-play");
+      const btnPause    = document.getElementById("m-pause");
+      const btnFF       = document.getElementById("m-fforward");
+
+      /* ---- controls ---- */
+      taxSlider.addEventListener("input", (e) => {
+        wealthTaxRate = parseFloat(e.target.value);
+        taxVal.textContent = wealthTaxRate.toFixed(2) + "%";
+      });
+      btnPlay.addEventListener("click", () => {
+        isRunning = true;
+        btnPlay.classList.add("active");
+        btnPause.classList.remove("active");
+      });
+      btnPause.addEventListener("click", () => {
+        isRunning = false;
+        btnPause.classList.add("active");
+        btnPlay.classList.remove("active");
+      });
+      btnFF.addEventListener("click", () => {
+        speedIndex = (speedIndex + 1) % CONFIG.speeds.length;
+        btnFF.textContent = "⏩ " + CONFIG.speeds[speedIndex] + "×";
+        btnFF.classList.toggle("active", speedIndex > 0);
+      });
+      eventDismiss.addEventListener("click", () => {
+        paused4Event = false;
+        activeMilestone = null;
+        eventBanner.classList.remove("active");
+      });
+
+      function setHistoricalUI() {
+        isFutureMode = false;
+        modeBadge.textContent = "TRACKING HISTORICAL DATA (1945–2026)";
+        modeBadge.className = "mode-indicator mode-historical";
+        taxSlider.disabled = true;
+        wealthTaxBox.style.opacity = "0.5";
+        eventBanner.classList.remove("future-variant");
+        eventTitle.style.color = "#38bdf8";
+      }
+      function setFutureUI() {
+        isFutureMode = true;
+        modeBadge.textContent = "PROJECTION SANDBOX (2026–2056) — ILLUSTRATIVE";
+        modeBadge.className = "mode-indicator mode-future";
+        taxSlider.disabled = false;
+        wealthTaxBox.style.opacity = "1";
+      }
+
+      btnRewind.addEventListener("click", () => {
+        const wasRunning = isRunning;          // preserve play/pause state
+        let y = currentDate.getFullYear() - 5;
+        if (y < startYear) y = startYear;
+        currentDate = new Date(y, 0, 1);
+        if (y < 2026) setHistoricalUI();
+        milestones.forEach(m => { if (m.year >= y) m.triggered = false; });
+        particles = [];
+        paused4Event = false;
+        activeMilestone = null;
+        eventBanner.classList.remove("active");
+        prevYearDec = y;
+        const h = getHistorical(y);
+        prevShares = { t01: h[1], t09: h[2], n9: h[3], b90: h[4] };
+        current.state = h[5];
+        stateDisplay = h[5];
+        totalWealthBn = CONFIG.totalWealth2026Bn;
+        isRunning = wasRunning;                 // <-- do NOT force play
+        btnPlay.classList.toggle("active", wasRunning);
+        btnPause.classList.toggle("active", !wasRunning);
+      });
+
+      // Jump to 2026, reset the projection to present-day figures, re-arm
+      // the 2026 milestone, and STAY PAUSED so the tax rate can be set first.
+      btnRerun.addEventListener("click", () => {
+        currentDate = new Date(2026, 0, 1);
+        const h2026 = CONFIG.historical[CONFIG.historical.length - 1];
+        current.t01 = h2026[1]; current.t09 = h2026[2];
+        current.n9  = h2026[3]; current.b90 = h2026[4];
+        current.state = h2026[5];
+        stateDisplay = h2026[5];
+        totalWealthBn = CONFIG.totalWealth2026Bn;
+        prevShares = { t01: h2026[1], t09: h2026[2], n9: h2026[3], b90: h2026[4] };
+        prevYearDec = 2026;
+        particles = [];
+        paused4Event = false;
+        activeMilestone = null;
+        eventBanner.classList.remove("active");
+        // re-arm every milestone from 2026 onward so the sandbox modal shows again
+        milestones.forEach(m => { if (m.year >= 2026) m.triggered = false; });
+        setFutureUI();
+        isRunning = false;                      // stay paused
+        btnPlay.classList.remove("active");
+        btnPause.classList.add("active");
+      });
+
+      btnReset.addEventListener("click", () => {
+        currentDate = new Date(startYear, 0, 1);
+        wealthTaxRate = 0.0;
+        taxSlider.value = 0;
+        taxVal.textContent = "0.00%";
+        speedIndex = 0;
+        btnFF.textContent = "⏩ 1×";
+        btnFF.classList.remove("active");
+        setHistoricalUI();
+        const h0 = CONFIG.historical[0];
+        current.t01 = h0[1]; current.t09 = h0[2]; current.n9 = h0[3];
+        current.b90 = h0[4]; current.state = h0[5];
+        stateDisplay = h0[5];
+        totalWealthBn = CONFIG.totalWealth2026Bn;
+        prevShares = { t01: h0[1], t09: h0[2], n9: h0[3], b90: h0[4] };
+        prevYearDec = startYear;
+        particles = [];
+        paused4Event = false;
+        activeMilestone = null;
+        eventBanner.classList.remove("active");
+        milestones.forEach(m => m.triggered = false);
+        isRunning = true;
+        btnPlay.classList.add("active");
+        btnPause.classList.remove("active");
+      });
+
+      /* ---- data interpolation ---- */
+      function getHistorical(yearDec) {
+        const H = CONFIG.historical;
+        if (yearDec <= H[0][0]) return H[0].slice();
+        if (yearDec >= H[H.length - 1][0]) return H[H.length - 1].slice();
+        for (let i = 0; i < H.length - 1; i++) {
+          if (yearDec >= H[i][0] && yearDec <= H[i + 1][0]) {
+            const a = H[i], b = H[i + 1];
+            const t = (yearDec - a[0]) / (b[0] - a[0]);
+            return a.map((v, idx) => v + t * (b[idx] - v));
+          }
+        }
+        return H[H.length - 1].slice();
+      }
+
+      function normaliseShares() {
+        // keep the four household shares summing to 100
+        let s = current.t01 + current.t09 + current.n9 + current.b90;
+        if (s <= 0) return;
+        const k = 100 / s;
+        current.t01 *= k; current.t09 *= k; current.n9 *= k; current.b90 *= k;
+      }
+
+      // £bn -> readable string (£X.XXtn or £XXXbn)
+      function fmtGBP(bn) {
+        if (bn >= 1000) return "£" + (bn / 1000).toFixed(2) + "tn";
+        return "£" + Math.round(bn) + "bn";
+      }
+      // deflate a future nominal £ back to 2026 "today's £"
+      function realFactor() {
+        const y = currentDate.getFullYear() + currentDate.getMonth() / 12;
+        const yrs = Math.max(0, y - 2026);
+        return 1 / Math.pow(1 + CONFIG.inflationPerYear, yrs);
+      }
+      // £ held by a group given its % share of the household pool
+      function poundsOf(pct) {
+        return (pct / 100) * totalWealthBn;
+      }
+
+      /* ---- particles ---- */
+      function spawn(from, to, color) {
+        const a = Math.random() * Math.PI * 2;
+        const off = Math.random() * 18;
+        particles.push({
+          x: from.x + Math.cos(a) * off,
+          y: from.y + Math.sin(a) * off,
+          tx: to.x, ty: to.y,
+          speed: 1.6 + Math.random() * 3.4,
+          color: color,
+          size: 1.5 + Math.random() * 2,
+        });
+      }
+
+      // Emit a burst whose SIZE reflects the magnitude of a transfer.
+      // pctMoved = percentage points of household wealth that shifted this
+      // step; perYear normalises bursts so speed/FF don't change the story.
+      // ~ one particle per 0.04 pts/yr, lightly randomised, capped.
+      function emitFlow(from, to, color, pctMoved, yearsElapsed) {
+        if (yearsElapsed <= 0 || pctMoved <= 0) return;
+        const ratePerYear = pctMoved / yearsElapsed;
+        let n = ratePerYear / 0.04;
+        // fractional remainder handled probabilistically so slow drifts
+        // still occasionally emit instead of rounding to zero
+        const whole = Math.floor(n);
+        const frac = n - whole;
+        let count = whole + (Math.random() < frac ? 1 : 0);
+        if (count > 14) count = 14;            // keep it readable
+        for (let i = 0; i < count; i++) spawn(from, to, color);
+      }
+
+      /* ---- milestones ---- */
+      function checkMilestones(yearDec) {
+        for (const m of milestones) {
+          if (!m.triggered && yearDec >= m.year) {
+            m.triggered = true;
+            activeMilestone = m;
+            paused4Event = true;
+            eventTitle.textContent = m.title;
+            eventBody.textContent = m.body;
+            if (m.year >= 2026) {
+              eventBanner.classList.add("future-variant");
+              eventTitle.style.color = "#c084fc";
+            } else {
+              eventBanner.classList.remove("future-variant");
+              eventTitle.style.color = "#38bdf8";
+            }
+            eventBanner.classList.add("active");
+            break;
+          }
+        }
+      }
+
+      /* ---- main update ---- */
+      function update() {
+        if (!isRunning) return;
+        if (paused4Event) return;            // wait for user to dismiss modal
+        if (currentDate >= endDate) {
+          isRunning = false;
+          btnPlay.classList.remove("active");
+          return;
+        }
+
+        const step = CONFIG.baseDaysPerTick * CONFIG.speeds[speedIndex];
+        const yearDec =
+          currentDate.getFullYear() + currentDate.getMonth() / 12;
+
+        checkMilestones(yearDec);
+        if (paused4Event) return;            // a milestone just fired this frame
+
+        currentDate.setDate(currentDate.getDate() + step);
+
+        if (yearDec < 2026) {
+          /* ---------- HISTORICAL ---------- */
+          if (isFutureMode) setHistoricalUI();
+          const h = getHistorical(yearDec);
+          current.t01 = h[1]; current.t09 = h[2]; current.n9 = h[3];
+          current.b90 = h[4]; current.state = h[5];
+
+          // measure how far each band moved since the previous frame and
+          // emit flow proportional to that magnitude + direction
+          const yElapsed = Math.max(yearDec - prevYearDec, 1e-6);
+          const dB90 = current.b90 - prevShares.b90;   // +ve = bottom gaining
+          const dT01 = current.t01 - prevShares.t01;
+          const dT09 = current.t09 - prevShares.t09;
+
+          if (dB90 > 0) {
+            // equalisation: wealth flowing DOWN to the bottom 90%
+            emitFlow(pools.t01, pools.b90, "#f43f5e",
+                     Math.max(-dT01, 0), yElapsed);
+            emitFlow(pools.t09, pools.b90, "#fb923c",
+                     Math.max(-dT09, 0), yElapsed);
+            emitFlow(pools.n9, pools.b90, "#fcd34d",
+                     dB90 * 0.3, yElapsed);
+          } else if (dB90 < 0) {
+            // concentration: wealth draining UP out of the bottom 90%
+            emitFlow(pools.b90, pools.t01, "#10b981",
+                     Math.max(dT01, 0), yElapsed);
+            emitFlow(pools.b90, pools.t09, "#10b981",
+                     Math.max(dT09, 0), yElapsed);
+            emitFlow(pools.b90, pools.n9, "#10b981",
+                     (-dB90) * 0.3, yElapsed);
+          }
+        } else {
+          /* ---------- FUTURE PROJECTION (illustrative) ---------- */
+          if (!isFutureMode) setFutureUI();
+
+          const yearsPerStep = step / 365;
+
+          /* --- (0) ECONOMIC GROWTH ---
+             The whole pool grows at the low nominal rate. Shares (the
+             percentages) still shift on top of this, so the bottom 90%'s
+             £ pile can rise in cash terms while shrinking in real terms —
+             the point of showing both numbers. */
+          totalWealthBn *=
+            Math.pow(1 + CONFIG.nominalGrowthPerYear, yearsPerStep);
+
+          /* --- (1) HOUSEHOLD DRIFT ---
+             Without enough tax, concentration continues: the bottom 90%
+             bleeds to the very top. Tax above the hold rate slows / reverses
+             this. (State is handled separately below — no longer a fudge.) */
+          const taxFactor =
+            (CONFIG.taxHoldRate - wealthTaxRate) / CONFIG.taxHoldRate;
+          const delta =
+            CONFIG.futureDriftPerYear * yearsPerStep * taxFactor;
+
+          if (delta > 0) {
+            const fromB90 = delta * 0.75;
+            if (current.b90 > 6) current.b90 -= fromB90;
+            current.t01 += fromB90 * 0.6;
+            current.t09 += fromB90 * 0.4;
+            emitFlow(pools.b90, pools.t01, "#10b981",
+                     fromB90 * 0.6, yearsPerStep);
+            emitFlow(pools.b90, pools.t09, "#10b981",
+                     fromB90 * 0.4, yearsPerStep);
+          } else if (delta < 0) {
+            const vol = Math.abs(delta);
+            if (current.t01 > 2.5) current.t01 -= vol * 0.62;
+            if (current.t09 > 4)   current.t09 -= vol * 0.38;
+            current.b90 += vol;
+            emitFlow(pools.t01, pools.b90, "#f43f5e",
+                     vol * 0.62, yearsPerStep);
+            emitFlow(pools.t09, pools.b90, "#fb923c",
+                     vol * 0.38, yearsPerStep);
+          }
+
+          /* --- (2) REVENUE → STATE REBUILD ---
+             Annual net revenue (% of GDP) from taxing the top 10% on
+             hard-to-relocate bases, with DIMINISHING RETURNS: the marginal
+             yield falls as the rate rises (base shrinks, more sheltering).
+             revenue = revPerPoint * rate * saturation(rate)
+             saturation = H / (H + rate)  -> concave, never negative. */
+          const r = wealthTaxRate;
+          let stateGainPerYear = 0;
+          if (r > 0) {
+            const sat =
+              CONFIG.revHalfSaturationRate /
+              (CONFIG.revHalfSaturationRate + r);
+            let revPctGDP = CONFIG.revPerPointAtLowRate * r * sat;
+
+            // It gets harder to keep improving net worth as it approaches
+            // the soft target (debt paid down, fewer cheap wins left).
+            const headroom =
+              (CONFIG.stateTarget - current.state) /
+              (CONFIG.stateTarget - (-100));
+            const ease = Math.max(0, Math.min(1, headroom));
+            stateGainPerYear =
+              Math.min(revPctGDP * ease, CONFIG.stateRebuildCapPerYear);
+
+            const stateGain = stateGainPerYear * yearsPerStep;
+            current.state += stateGain;
+
+            // The revenue is EXTRACTED from the top of the household
+            // distribution (a wealth tax mechanically takes from the
+            // wealthy). Convert the %GDP raised into an approx share of
+            // household wealth removed from the top bands. UK household
+            // wealth ≈ 5–6× GDP, so 1% of GDP ≈ ~0.18 pts of household
+            // share; we route it out of the 0.1% and 0.9% bands.
+            const sharePulled = revPctGDP * yearsPerStep * 0.18;
+            const fromT01 = sharePulled * 0.55;
+            const fromT09 = sharePulled * 0.45;
+            if (current.t01 > 2.0) current.t01 -= fromT01;
+            if (current.t09 > 3.0) current.t09 -= fromT09;
+
+            // visualise it: wealth flowing from the top into the State
+            emitFlow(pools.t01, { x: canvas._w * 0.5, y: canvas._h * 0.9 },
+                     "#38bdf8", fromT01, yearsPerStep);
+            emitFlow(pools.t09, { x: canvas._w * 0.5, y: canvas._h * 0.9 },
+                     "#38bdf8", fromT09, yearsPerStep);
+          }
+
+          // clamp state to a sane window
+          if (current.state > 60) current.state = 60;
+          if (current.state < -160) current.state = -160;
+          normaliseShares();
+        }
+
+        // record this frame's shares so the next frame can measure how
+        // much moved (drives magnitude-proportional particle flow)
+        prevShares.t01 = current.t01;
+        prevShares.t09 = current.t09;
+        prevShares.n9  = current.n9;
+        prevShares.b90 = current.b90;
+        prevYearDec = yearDec;
+
+        /* ---- HUD ---- */
+        document.getElementById("hud-date").textContent =
+          currentDate.toLocaleDateString("en-GB", {
+            year: "numeric", month: "2-digit", day: "2-digit",
+          });
+        document.getElementById("hud-top01").textContent =
+          current.t01.toFixed(1) + "%";
+        document.getElementById("hud-top1").textContent =
+          current.t09.toFixed(1) + "%";
+        document.getElementById("hud-top10").textContent =
+          current.n9.toFixed(1) + "%";
+        document.getElementById("hud-bottom90").textContent =
+          current.b90.toFixed(1) + "%";
+
+        document.getElementById("gbp-top01").textContent =
+          fmtGBP(poundsOf(current.t01));
+        document.getElementById("gbp-top1").textContent =
+          fmtGBP(poundsOf(current.t09));
+        document.getElementById("gbp-top10").textContent =
+          fmtGBP(poundsOf(current.n9));
+        document.getElementById("gbp-bottom90").textContent =
+          fmtGBP(poundsOf(current.b90));
+        document.getElementById("gbp-total").textContent =
+          fmtGBP(totalWealthBn);
+        document.getElementById("gbp-total-real").textContent =
+          isFutureMode
+            ? fmtGBP(totalWealthBn * realFactor()) + " in today's £"
+            : "";
+      }
+
+      /* ---- render ---- */
+      function draw() {
+        const w = canvas._w || canvas.width;
+        const h = canvas._h || canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const scalar = (w * h) * 0.00016;
+        pools.t01.r = Math.sqrt(Math.max(current.t01, 0.2) * scalar);
+        pools.t09.r = Math.sqrt(Math.max(current.t09, 0.2) * scalar);
+        pools.n9.r  = Math.sqrt(Math.max(current.n9, 0.2) * scalar);
+        pools.b90.r = Math.sqrt(Math.max(current.b90, 0.2) * scalar);
+
+        const valById = { t01: "t01", t09: "t09", n9: "n9", b90: "b90" };
+        Object.keys(pools).forEach((key) => {
+          const p = pools[key];
+          if (!p.cr) p.cr = p.r;
+          p.cr += (p.r - p.cr) * 0.1;
+
+          ctx.save();
+          ctx.shadowBlur = p.cr * 0.35;
+          ctx.shadowColor = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.cr, 0, Math.PI * 2);
+          ctx.fillStyle = p.color + "1f";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = p.color;
+          ctx.stroke();
+          ctx.restore();
+
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 13px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(p.label, p.x, p.y - 12);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.font = "12px monospace";
+          ctx.fillText(
+            current[valById[key]].toFixed(1) + "%", p.x, p.y + 6
+          );
+          // £ figure: nominal, plus real (today's £) once projecting
+          const bn = poundsOf(current[valById[key]]);
+          ctx.fillStyle = "#fde68a";
+          ctx.font = "bold 12px monospace";
+          ctx.fillText(fmtGBP(bn), p.x, p.y + 22);
+          if (isFutureMode) {
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "10px monospace";
+            ctx.fillText(
+              fmtGBP(bn * realFactor()) + " (today's £)", p.x, p.y + 36
+            );
+          }
+        });
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          const dx = p.tx - p.x, dy = p.ty - p.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 10) { particles.splice(i, 1); continue; }
+          p.x += (dx / d) * p.speed;
+          p.y += (dy / d) * p.speed;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
+
+        drawWaterline(w, h);
+      }
+
+      /* ---- State / Public Net Worth waterline ----
+         Lives in the bottom band of the canvas, on its OWN scale (% of GDP),
+         deliberately separate from the household-wealth circles above.
+         Zero line = post-war baseline. Water rises (blue) when the state has
+         positive net worth, and sinks below the line (red) when negative. */
+      function drawWaterline(w, h) {
+        // ease the displayed value so it glides rather than jumps
+        stateDisplay += (current.state - stateDisplay) * 0.06;
+        waveT += 0.045;
+
+        const bandTop = h * 0.74;          // top of the state zone
+        const bandBot = h - 4;
+        const bandH = bandBot - bandTop;
+        const zeroY = bandTop + bandH * 0.34;  // where "0% of GDP" sits
+
+        // map state value (% GDP) to a vertical offset from the zero line.
+        // range chosen so +60 ... -160 fills the band comfortably.
+        const lo = -160, hi = 60;
+        const frac = (stateDisplay - 0) / (hi - lo); // signed fraction of full range
+        let surfaceY = zeroY - frac * bandH * 1.55;
+        // keep the surface inside the band
+        if (surfaceY < bandTop + 6) surfaceY = bandTop + 6;
+        if (surfaceY > bandBot - 2) surfaceY = bandBot - 2;
+
+        const isNeg = stateDisplay < 0;
+        const water = isNeg ? "#ef4444" : "#38bdf8";
+
+        ctx.save();
+
+        // faint zone divider so it reads as a separate measure
+        ctx.strokeStyle = "rgba(148,163,184,0.18)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, bandTop);
+        ctx.lineTo(w, bandTop);
+        ctx.stroke();
+
+        // water body with an animated surface
+        ctx.beginPath();
+        ctx.moveTo(0, bandBot + 4);
+        ctx.lineTo(0, surfaceY);
+        const amp = 4, len = 150;
+        for (let x = 0; x <= w; x += 12) {
+          const y =
+            surfaceY +
+            Math.sin(x / len + waveT) * amp +
+            Math.sin(x / (len * 0.45) + waveT * 1.7) * (amp * 0.4);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, bandBot + 4);
+        ctx.closePath();
+        const grad = ctx.createLinearGradient(0, surfaceY, 0, bandBot);
+        grad.addColorStop(0, water + "55");
+        grad.addColorStop(1, water + "12");
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // surface highlight line
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 12) {
+          const y =
+            surfaceY +
+            Math.sin(x / len + waveT) * amp +
+            Math.sin(x / (len * 0.45) + waveT * 1.7) * (amp * 0.4);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = water;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // zero / post-war baseline reference
+        ctx.setLineDash([6, 5]);
+        ctx.strokeStyle = "rgba(203,213,225,0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, zeroY);
+        ctx.lineTo(w, zeroY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "rgba(203,213,225,0.65)";
+        ctx.font = "11px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("0% of GDP — post-war baseline", 10, zeroY - 6);
+
+        // big live readout
+        const gv = Math.round(stateDisplay);
+        ctx.textAlign = "right";
+        ctx.fillStyle = water;
+        ctx.font = "bold 22px sans-serif";
+        ctx.fillText(
+          "State / Public Net Worth: " + (gv >= 0 ? "+" : "") + gv + "% of GDP",
+          w - 16,
+          bandBot - 26
+        );
+        ctx.fillStyle = "rgba(148,163,184,0.85)";
+        ctx.font = "11px sans-serif";
+        ctx.fillText(
+          "Separate scale from the household circles above — it can go negative.",
+          w - 16,
+          bandBot - 8
+        );
+
+        ctx.restore();
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      /* ---- boot ---- */
+      resizeCanvas();
+      (function initState() {
+        const h0 = CONFIG.historical[0];
+        current.t01 = h0[1]; current.t09 = h0[2]; current.n9 = h0[3];
+        current.b90 = h0[4]; current.state = h0[5];
+        stateDisplay = h0[5];
+        totalWealthBn = CONFIG.totalWealth2026Bn;
+      })();
+      loop();
+    </script>
+  </body>
+</html>
